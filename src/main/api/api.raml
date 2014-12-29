@@ -1,0 +1,33 @@
+#%RAML 0.8
+---
+title: Sample API
+version: v1
+baseUri: http://localhost:8090/{version}/contractors
+mediaType: application/json
+documentation:
+  - title: Introduction
+    content: |
+      API to manage the contractor flag calculation and TRIR for a contractor.
+/{id}/auditdata: 
+ get: 
+  headers: 
+   Authorization:
+     type: string
+     required: true
+     example: Bearer 25616443-9922-49e8-bde7-4263c6b37983
+  responses:  
+     200: 
+       body: 
+/audits/{auditid}/auditupdate: 
+ post: 
+  headers: 
+   Authorization:
+     type: string
+     required: true
+     example: Bearer 25616443-9922-49e8-bde7-4263c6b37983 
+   body:
+     example:   
+        "{questionId : 48, answer:0.001}"
+  responses:  
+     200: 
+       body: 

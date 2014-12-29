@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:amqp="http://www.mulesoft.org/schema/mule/amqp" xmlns:https="http://www.mulesoft.org/schema/mule/https" xmlns:json="http://www.mulesoft.org/schema/mule/json" xmlns:tracking="http://www.mulesoft.org/schema/mule/ee/tracking" xmlns:vm="http://www.mulesoft.org/schema/mule/vm" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:context="http://www.springframework.org/schema/context" xmlns:apikit="http://www.mulesoft.org/schema/mule/apikit" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:spring="http://www.springframework.org/schema/beans" xmlns:core="http://www.mulesoft.org/schema/mule/core" version="EE-3.5.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/json http://www.mulesoft.org/schema/mule/json/current/mule-json.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context.xsd
+http://www.mulesoft.org/schema/mule/apikit http://www.mulesoft.org/schema/mule/apikit/current/mule-apikit.xsd
+http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/vm http://www.mulesoft.org/schema/mule/vm/current/mule-vm.xsd
+http://www.mulesoft.org/schema/mule/ee/tracking http://www.mulesoft.org/schema/mule/ee/tracking/current/mule-tracking-ee.xsd
+http://www.mulesoft.org/schema/mule/https http://www.mulesoft.org/schema/mule/https/current/mule-https.xsd
+http://www.mulesoft.org/schema/mule/amqp http://www.mulesoft.org/schema/mule/amqp/current/mule-amqp.xsd">
+
+
+<context:property-placeholder    location="file:///root/mmc-distribution-mule-console-bundle-3.5.2-HF1/mule-enterprise-3.5.2/conf/config.properties" />
+
+    <apikit:config name="apiConfig" raml="api.raml" consoleEnabled="true" consolePath="console" doc:name="Router">
+        <apikit:flow-mapping resource="/{id}/auditdata" action="get" flow-ref="findContractorAudits"/>
+        <apikit:flow-mapping resource="/audits/{auditid}/auditupdate" action="post" flow-ref="updateAuditQuestion"/>
+    </apikit:config>
+    <apikit:mapping-exception-strategy name="Mapping_Exception_Strategy" doc:name="Mapping Exception Strategy">  
+        <apikit:mapping statusCode="404"> 
+            <apikit:exception value="org.mule.module.apikit.exception.NotFoundException"/>  
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"></set-property>  
+            <set-payload value="{ &quot;message&quot;: &quot;Resource not found&quot; }" doc:name="Set Payload"></set-payload> 
+        </apikit:mapping>  
+        <apikit:mapping statusCode="405"> 
+            <apikit:exception value="org.mule.module.apikit.exception.MethodNotAllowedException"/>  
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"></set-property>  
+            <set-payload value="{ &quot;message&quot;: &quot;Method not allowed&quot; }" doc:name="Set Payload"></set-payload> 
+        </apikit:mapping>  
+        <apikit:mapping statusCode="415"> 
+            <apikit:exception value="org.mule.module.apikit.exception.UnsupportedMediaTypeException"/>  
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"></set-property>  
+            <set-payload value="{ &quot;message&quot;: &quot;Unsupported media type&quot; }" doc:name="Set Payload"></set-payload> 
+        </apikit:mapping>  
+        <apikit:mapping statusCode="406"> 
+            <apikit:exception value="org.mule.module.apikit.exception.NotAcceptableException"/>  
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"></set-property>  
+            <set-payload value="{ &quot;message&quot;: &quot;Not acceptable&quot; }" doc:name="Set Payload"></set-payload> 
+        </apikit:mapping>  
+        <apikit:mapping statusCode="400"> 
+            <apikit:exception value="org.mule.module.apikit.exception.BadRequestException"/>  
+            <set-property propertyName="Content-Type" value="application/json" doc:name="Property"></set-property>  
+            <set-payload value="{ &quot;message&quot;: &quot;Bad request&quot; }" doc:name="Set Payload"></set-payload> 
+        </apikit:mapping> 
+    </apikit:mapping-exception-strategy>
+    <json:object-to-json-transformer mimeType="application/json" name="Object_to_JSON" doc:name="Object to JSON"/>
+    <catch-exception-strategy name="Catch_Exception_Strategy">
+        <logger level="INFO" doc:name="Logger"/>
+        <amqp:outbound-endpoint exchangeName="pics.mule.exchange" queueName="pics.mule.exception.queue" routingKey="pics.mule.exception" exchangeType="fanout" exchangeDurable="true" queueDurable="true" responseTimeout="10000" exchange-pattern="request-response" doc:name="Rabbit"/>
+    </catch-exception-strategy>
+    <flow name="main" doc:name="main">
+        <http:inbound-endpoint address="${pics.contractors.mule.uri}" doc:name="HTTP" exchange-pattern="request-response" mimeType="application/json"/>
+        <response>
+            <logger message="AFTER route #[payload]" level="INFO" doc:name="Logger"/>
+        </response>
+        <apikit:router config-ref="apiConfig" doc:name="APIkit Router"/>
+        <exception-strategy ref="Mapping_Exception_Strategy" doc:name="Reference Exception Strategy"/>
+    </flow>
+    <flow name="findContractorAudits" doc:name="findContractorAudits">
+        <vm:inbound-endpoint exchange-pattern="request-response" address="vm://transf" doc:name="VM"/>
+        <message-properties-transformer doc:name="Message Properties">
+            <add-message-property key="Authorization" value="#[message.inboundProperties['Authorization']]"/>
+        </message-properties-transformer>
+        
+        <https:outbound-endpoint exchange-pattern="request-response" method="GET" address="${pics.contractor.audits.inquiry.uri}" doc:name="FindAudits"/>
+        <object-to-string-transformer doc:name="Object to String"/>
+    </flow>
+    <flow name="updateAuditQuestion" doc:name="updateAuditQuestion">
+        <vm:inbound-endpoint exchange-pattern="request-response" address="vm://auditQuestionDataUpdates" responseTimeout="30000" doc:name="VM"/>
+        <logger message="Echoing config.properties in mule -----   ${pics.contractor.flag.calculator.uri}" level="INFO" doc:name="Log - Plain old echo"/>
+        <set-session-variable variableName="Authorization" doc:name="Session Variable"  value="#[message.inboundProperties['Authorization']]"/>
+        <flow-ref name="sendRequestToContractorAudit" doc:name="sendRequestToContractorAudit"/>
+        <choice doc:name="Check if Audit is Successful">
+            <when expression="#[payload['contractorId']!=null]">
+                <logger message="Send Request to Contractor Audit #[payload] , Session Vars #[sessionVars]" level="INFO" doc:name="Logger"/>
+                <expression-transformer expression="#[payload['contractorId']]" doc:name="Expression"/>
+                <flow-ref name="sendRequestToContractorFlagCalculator" doc:name="sendRequestToContractorFlagCalculator"/>
+                <flow-ref name="sendRequestToContractorFlags" doc:name="sendRequestToContractorFlags"/>
+            </when>
+            <otherwise>
+                <logger message="Audit was unsuccessful.  Payload follows : #[payload]  ------ ${pics.contractor.flag.calculator.uri}" level="INFO" doc:name="Logger"/>
+            </otherwise>
+        </choice>
+        <object-to-string-transformer doc:name="Object to String"/>
+    </flow>
+    <sub-flow name="sendRequestToContractorAudit" doc:name="sendRequestToContractorAudit">
+        <logger message="Audit request is successful #[payload] flow vars : #[sessionVars.Authorization]" level="INFO" doc:name="Logger"/>
+        <message-properties-transformer doc:name="Message Properties">
+            <add-message-property key="Authorization" value="#[sessionVars.Authorization]"/>
+        </message-properties-transformer>
+        <https:outbound-endpoint exchange-pattern="request-response" method="POST" address="${pics.contractor.audits.uri}" contentType="application/json" doc:name="UpdateAudits"/>
+        <logger message="Flow vars for authorization #[sessionVars.Authorization]" level="INFO" doc:name="Log flowvar for auth"/>
+        <json:json-to-object-transformer returnClass="java.lang.Object" doc:name="JSON to Object"/>
+    </sub-flow>
+    <sub-flow name="sendRequestToContractorFlagCalculator" doc:name="sendRequestToContractorFlagCalculator">
+        <logger message="Audit request is successful - Sending payload to flag calculator#[payload] flow vars : #[sessionVars.Authorization]" level="INFO" doc:name="Logger"/>
+        <set-session-variable variableName="contractorId" value="#[payload]" doc:name="Session Variable"/>
+                <message-properties-transformer doc:name="Message Properties">
+                    <add-message-property key="Authorization" value="#[sessionVars.Authorization]"/>
+                </message-properties-transformer>
+        <logger message="Check uri ${pics.contractor.flag.calculator.uri}" level="INFO" doc:name="Logger"/>
+        <https:outbound-endpoint exchange-pattern="request-response"   method="POST" doc:name="UpdateFlags" address="${pics.contractor.flag.calculator.uri}" transformer-refs="Object_to_JSON"/>
+        <object-to-string-transformer doc:name="Object to String"/>
+    </sub-flow>
+    <sub-flow name="sendRequestToContractorFlags" doc:name="sendRequestToContractorFlags">
+        <logger message="Send request to contractor flags #[sessionVars.contractorId]" level="INFO" doc:name="Logger"/>
+            <message-properties-transformer doc:name="Message Properties">
+            <add-message-property key="Authorization" value="#[sessionVars.Authorization]"/>
+        </message-properties-transformer>
+        <https:outbound-endpoint exchange-pattern="request-response" method="GET" address="${pics.contractor.flags.inquiry.uri}" contentType="application/json" doc:name="ContractorFlags"/>
+        <logger message="Flow vars for authorization #[sessionVars.Authorization]" level="INFO" doc:name="Log session var for auth"/>
+        <object-to-string-transformer doc:name="Object to String"/>
+    </sub-flow>
+</mule>
